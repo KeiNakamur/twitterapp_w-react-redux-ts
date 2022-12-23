@@ -14,12 +14,24 @@ import LockOutlinedIcon from "@material-ui/icons/LockOutlined";
 import Typography from "@material-ui/core/Typography";
 import { makeStyles } from "@material-ui/core/styles";
 import { useDispatch } from "react-redux";
+import { updateUserProfile } from "../features/userSlice";
 import { auth, provider, storage } from "../firebase";
 import SendIcon from "@material-ui/icons/Send";
-import CameraIcon from "@material-ui/icons/Camera";
 import EmailIcon from "@material-ui/icons/Email";
 import AccountCircleIcon from "@material-ui/icons/AccountCircle";
 import Feed from "./Feed";
+import { IconButton, Modal } from "@material-ui/core";
+
+const getModalStyle = () => {
+  const top = 50;
+  const left = 50;
+
+  return {
+    top: `${top}%`,
+    left: `${left}%`,
+    transform: `translate(-${top}%, -${left}%)`,
+  };
+};
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -52,10 +64,20 @@ const useStyles = makeStyles((theme) => ({
   submit: {
     margin: theme.spacing(3, 0, 2),
   },
+  modal: {
+    outline: "none",
+    position: "absolute",
+    width: 400,
+    borderRadius: 10,
+    backgroundColor: "white",
+    boxShadow: theme.shadows[5],
+    padding: theme.spacing(10),
+  },
 }));
 
 const Auth: React.FC = () => {
   const classes = useStyles();
+  const dispatch = useDispatch();
   // メールとパスワードの定義
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -67,7 +89,24 @@ const Auth: React.FC = () => {
   // 新規登録する際に画像を登録できる状態変数(Fileオブジェクトタイプで定義)
   const [avatarImage, setAvatarImage] = useState<File | null>(null);
 
-  // アイコンをクリックし、ファイルを選択するためのダイアログのための状態変数
+  const [openModal, setOpenModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+
+  // パスワードリセット
+  async function sendResetEmail(e: React.MouseEvent<HTMLElement>) {
+    await auth
+      .sendPasswordResetEmail(resetEmail)
+      .then(() => {
+        setOpenModal(false);
+        setResetEmail("");
+      })
+      .catch((error) => {
+        alert(error.message);
+        setResetEmail("");
+      });
+  }
+
+  // アイコンをクリックし、ファイルを選択するため
   const onChangeImageHandler = (e: React.ChangeEvent<HTMLInputElement>) => {
     // 画像を一つだけ取得(ユーザーが選択)するのでe.target.files![0]※nullやundefinedにしたくないので!
     if (e.target.files![0]) {
@@ -92,7 +131,7 @@ const Auth: React.FC = () => {
       const S = "qwertyuiopasdfghjklzxcvbnm";
       const N = 8;
       const randomChar = Array.from(crypto.getRandomValues(new Uint32Array(N)))
-        .map((n) => S[n % SendIcon.length])
+        .map((n) => S[n % S.length])
         .join("");
       const fileName = randomChar + " " + avatarImage.name;
 
@@ -106,6 +145,12 @@ const Auth: React.FC = () => {
       displayName: username,
       photoURL: url,
     });
+    dispatch(
+      updateUserProfile({
+        displayName: username,
+        photoUrl: url,
+      })
+    );
   };
 
   const signInGoogle = async () => {
@@ -126,6 +171,45 @@ const Auth: React.FC = () => {
             {isLogin ? "Login" : "Register"}
           </Typography>
           <form className={classes.form} noValidate>
+            {!isLogin && (
+              <>
+                <TextField
+                  variant="outlined"
+                  margin="normal"
+                  required
+                  fullWidth
+                  id="username"
+                  label="Username"
+                  name="username"
+                  autoComplete="username"
+                  autoFocus
+                  value={username}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setUsername(e.target.value);
+                  }}
+                />
+                <Box textAlign="center" className={styles.Box}>
+                  <IconButton>
+                    <label>
+                      <AccountCircleIcon
+                        fontSize="large"
+                        className={
+                          avatarImage
+                            ? styles.login_addIconLoaded
+                            : styles.login_addIcon
+                        }
+                      />
+                      <input
+                        className={styles.login_hiddenIcon}
+                        type="file"
+                        onChange={onChangeImageHandler}
+                      />
+                    </label>
+                  </IconButton>
+                </Box>
+              </>
+            )}
+
             <TextField
               variant="outlined"
               margin="normal"
@@ -157,6 +241,13 @@ const Auth: React.FC = () => {
               }}
             />
             <Button
+              disabled={
+                isLogin
+                  ? // loginの際
+                    !email || password.length < 6
+                  : // signUpの際
+                    !email || password.length < 6 || !username || !avatarImage
+              }
               type="submit"
               fullWidth
               variant="contained"
@@ -169,7 +260,6 @@ const Auth: React.FC = () => {
                       // loginの場合
                       try {
                         await signInEmail();
-                        <Feed />;
                       } catch (error: any) {
                         alert(error.message);
                       }
@@ -183,10 +273,11 @@ const Auth: React.FC = () => {
                       }
                     }
               }>
-              {isLogin ? "Login" : "SignIn"}
+              {isLogin ? "Login" : "register"}
             </Button>
             <Button
               fullWidth
+              className={styles.google_button}
               variant="contained"
               color="primary"
               onClick={signInGoogle}>
@@ -194,7 +285,11 @@ const Auth: React.FC = () => {
             </Button>
 
             <Grid item xs>
-              <span className={styles.login_reset}>Forgot Password?</span>
+              <span
+                className={styles.login_reset}
+                onClick={() => setOpenModal(true)}>
+                Forgot Password?
+              </span>
             </Grid>
             <Grid item xs>
               <span
@@ -210,6 +305,28 @@ const Auth: React.FC = () => {
               </span>
             </Grid>
           </form>
+
+          <Modal open={openModal} onClose={() => setOpenModal(false)}>
+            <div style={getModalStyle()} className={classes.modal}>
+              <div className={styles.login_modal}>
+                <TextField
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  type="email"
+                  name="email"
+                  label="Reset E-mail"
+                  value={resetEmail}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setResetEmail(e.target.value);
+                  }}
+                />
+                <IconButton onClick={sendResetEmail}>
+                  <SendIcon />
+                </IconButton>
+              </div>
+            </div>
+          </Modal>
         </div>
       </Grid>
     </Grid>

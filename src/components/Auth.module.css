@@ -16,6 +16,12 @@
   display: none;
 }
 
+.Box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .login_addIcon {
   cursor: pointer;
   color: gray;
@@ -28,4 +34,8 @@
 
 .createNewAccount {
   cursor: pointer;
+}
+
+.google_button {
+  margin-bottom: 10px;
 }

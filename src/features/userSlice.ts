@@ -7,7 +7,6 @@ interface USER {
   photoUrl: string;
 }
 
-
 export const userSlice = createSlice({
   name: "user",
   initialState: {
